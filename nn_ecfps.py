@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from rdkit import Chem, DataStructs
+from tabulate import tabulate
 
 
 # from mol2vec.features import mol2alt_sentence, MolSentence, DfVec, sentences2vec
@@ -197,17 +198,6 @@ def main():
     unimi_pred = model.predict(x_unimi)
     bitter_new_pred = model.predict(x_bitter_new)
 
-    print("acc Phyto", accuracy_score(phyto_pred.round(), y_phyto))
-    print("F1 Phyto", f1_score(phyto_pred.round(), y_phyto))
-
-    print("acc unimi", accuracy_score(unimi_pred.round(), y_unimi))
-    print("F1 unimi", f1_score(unimi_pred.round(), y_unimi))
-
-    print("acc bitter new", accuracy_score(bitter_new_pred.round(), y_bitter_new))
-    print("F1 bitter new", f1_score(bitter_new_pred.round(), y_bitter_new))
-
-    # model.save("model/propo_nn_ecfp")
-
     phyto_tn, phyto_fp, phyto_fn, phyto_tp = confusion_matrix(
         phyto_pred.round(), y_phyto
     ).ravel()
@@ -222,6 +212,50 @@ def main():
         bitter_new_pred.round(), y_bitter_new
     ).ravel()
     bitter_new_specificity = bitter_new_tn / (bitter_new_tn + bitter_new_fp)
+
+    acc_phyto = accuracy_score(phyto_pred.round(), y_phyto)
+    f1_phyto = f1_score(phyto_pred.round(), y_phyto)
+    recall_phyto = recall_score(phyto_pred.round(), y_phyto)
+    aupr_phyto = average_precision_score(y_phyto, phyto_pred)
+    sensitive_phyto = phyto_tp / (phyto_tp + phyto_fn)
+
+    acc_unimi = accuracy_score(unimi_pred.round(), y_unimi)
+    f1_unimi = f1_score(unimi_pred.round(), y_unimi)
+    recall_unimi = recall_score(unimi_pred.round(), y_unimi)
+    aupr_unimi = average_precision_score(y_unimi, unimi_pred)
+    sensitive_unimi = unimi_tp / (unimi_tp + unimi_fn)
+
+    acc_bitter_new = accuracy_score(bitter_new_pred.round(), y_bitter_new)
+    f1_bitter_new = f1_score(bitter_new_pred.round(), y_bitter_new)
+    recall_bitter_new = recall_score(bitter_new_pred.round(), y_bitter_new)
+    aupr_bitter_new = average_precision_score(y_bitter_new, bitter_new_pred)
+    sensitive_bitter_new = bitter_new_tp / (bitter_new_tp + bitter_new_fn)
+
+    # print("acc unimi", accuracy_score(unimi_pred.round(), y_unimi))
+    # print("F1 unimi", f1_score(unimi_pred.round(), y_unimi))
+
+    # print("acc bitter new", accuracy_score(bitter_new_pred.round(), y_bitter_new))
+    # print("F1 bitter new", f1_score(bitter_new_pred.round(), y_bitter_new))
+
+    # Tạo dữ liệu bảng
+    table = [
+        ["Metric", "Phyto Value", "Unimi Value", "Bitter New Value"],
+        ["Accuracy", acc_phyto, acc_unimi, acc_bitter_new],
+        ["SN (Sensitivity)", sensitive_phyto, sensitive_unimi, sensitive_bitter_new],
+        ["Recall (Sensitivity)", recall_phyto, recall_unimi, recall_bitter_new],
+        [
+            "SP Specificity",
+            phyto_specificity,
+            unimi_specificity,
+            bitter_new_specificity,
+        ],
+        ["F1 Score", f1_phyto, f1_unimi, f1_bitter_new],
+        ["AUPR (OK)", aupr_phyto, aupr_unimi, aupr_bitter_new],
+    ]
+
+    # In bảng
+    print(tabulate(table, headers="firstrow", tablefmt="grid"))
+    # model.save("model/propo_nn_ecfp")
 
     return (
         [
@@ -258,12 +292,12 @@ while 1:
     print("loop: ", i)
     print("max unimi", unimi_score)
     print("max aupr", aupr)
-    print("-----------------------------")
-    for v in score:
-        for item in v:
-            print(item, end=" ")
-        print()
-    print("-----------------------------")
+    # print("-----------------------------")
+    # for v in score:
+    #     for item in v:
+    #         print(item, end=" ")
+    #     print()
+    # print("-----------------------------")
 
     if score[1][2] >= 0.81:
         break

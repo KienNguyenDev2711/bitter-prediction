@@ -68,7 +68,7 @@ seed = 200422
 
 data_train = pd.read_csv("dataset/bitter-or-not/true_train.csv")
 data_test = pd.read_csv("dataset/bitter-or-not/true_test.csv")
-data_valid = pd.read_csv("dataset/bitter-or-not/true_valid.csv")
+data_valid = pd.read_csv("dataset/test_set/UNIMI.csv")
 
 data_train = data_train.sample(frac=1)
 data_test = data_test.sample(frac=1)

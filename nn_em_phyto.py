@@ -15,14 +15,22 @@ from keras import regularizers
 from keras.optimizers import RMSprop
 from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import train_test_split
-import keras.backend as K
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import tensorflow.keras.backend as K
+from tabulate import tabulate
+
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+)
 from rdkit.Chem import rdMolDescriptors
 from sklearn.metrics import average_precision_score
 from keras.layers import Flatten
 from keras.layers import Embedding
-from keras.layers.convolutional import Conv1D
-from keras.layers.convolutional import MaxPooling1D
+from keras.layers import Conv1D
+from keras.layers import MaxPooling1D
 from keras.preprocessing import sequence
 from sklearn.model_selection import StratifiedKFold
 from keras.utils import pad_sequences
@@ -30,22 +38,28 @@ from sklearn.metrics import roc_auc_score
 import tensorflow as tf
 
 
+def precision(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + K.epsilon())
+    return precision
+
+
+def recall(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    recall = true_positives / (possible_positives + K.epsilon())
+    return recall
+
+
 def f1(y_true, y_pred):
-    def recall(y_true, y_pred):
-        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-        possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
-        recall = true_positives / (possible_positives + K.epsilon())
-        return recall
-
-    def precision(y_true, y_pred):
-        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-        predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
-        precision = true_positives / (predicted_positives + K.epsilon())
-        return precision
-
-    precision = precision(y_true, y_pred)
-    recall = recall(y_true, y_pred)
-    return 2 * ((precision * recall) / (precision + recall + K.epsilon()))
+    y_true = K.cast(y_true, "float32")  # Ensure y_true is float32
+    y_pred = K.cast(y_pred, "float32")  # Ensure y_pred is float32
+    precision_val = precision(y_true, y_pred)
+    recall_val = recall(y_true, y_pred)
+    return 2 * (
+        (precision_val * recall_val) / (precision_val + recall_val + K.epsilon())
+    )
 
 
 seed = 200422
@@ -119,7 +133,7 @@ def main():
     y_train = data_train["Bitter"].values.reshape(-1, 1)
 
     model.compile(
-        optimizer=keras.optimizers.Adam(lr=0.001),
+        optimizer=keras.optimizers.Adam(learning_rate=0.001),
         loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
         metrics=[f1],
     )
@@ -132,9 +146,41 @@ def main():
     )
     phyto_pred = model.predict(x_phyto)
 
-    print("F1 Phyto: ", f1_score(phyto_pred.round(), y_phyto))
-    print("AUPR Phyto: ", average_precision_score(y_phyto, phyto_pred))
+    f1score = f1_score(phyto_pred.round(), y_phyto)
+    AUPR = average_precision_score(y_phyto, phyto_pred)
+    acc_phyto = accuracy_score(phyto_pred.round(), y_phyto)
+    recall_sensitivity = recall_score(phyto_pred.round(), y_phyto)
+    confusion = confusion_matrix(phyto_pred.round(), y_phyto)[0]
+    phyto_specificity1 = (confusion[0]) / (confusion[0] + confusion[1])
+    # phyto_tn, phyto_fp, phyto_fn, phyto_tp = confusion_matrix(
+    #     phyto_pred.round(), y_phyto
+    # ).ravel()
+    # phyto_specificity2 = phyto_tn / (phyto_tn + phyto_fp)
+    # sensitive_phyto = phyto_tp / (phyto_tp + phyto_fn)
 
+    table = [
+        [
+            "Metric",
+            "Accuracy",
+            "recall (Sensitivity)",
+            # "SN (Sensitivity)",
+            "SP Specificity 1",
+            # "SP Specificity 2",
+            "F1 Score",
+            "AUPR",
+        ],
+        [
+            "Phyto",
+            acc_phyto,
+            recall_sensitivity,
+            # sensitive_phyto,
+            phyto_specificity1,
+            # phyto_specificity2,
+            f1score,
+            AUPR,
+        ],
+    ]
+    print(tabulate(table, headers="firstrow", tablefmt="grid"))
     # model.save("model/")
     return (
         f1_score(phyto_pred.round(), y_phyto),
@@ -142,16 +188,16 @@ def main():
     )
 
 
-phyto_socre = 0
+phyto_score = 0
 aupr = 0
 i = 0
 while 1:
     score = main()
-    phyto_socre = max(phyto_socre, score[0])
+    phyto_score = max(phyto_score, score[0])
     aupr = max(aupr, score[1])
     i += 1
     print("loop: ", i)
-    print("max phto", phyto_socre)
+    print("max phyto", phyto_score)
     print("max aupr", aupr)
     if (score[0] >= 0.93) and (score[1] >= 0.95):
         break
