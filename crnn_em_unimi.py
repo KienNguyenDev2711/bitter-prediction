@@ -170,6 +170,7 @@ def main():
     phyto_specificity = phyto_tn / (phyto_tn + phyto_fp)
     print(phyto_specificity),  # (SP) specificity
     print(average_precision_score(y_true_test, true_pred))  # AUPR
+    print(average_precision_score(y_true_test, true_pred))  # AUPR
 
 
 main()
