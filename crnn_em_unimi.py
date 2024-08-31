@@ -164,12 +164,11 @@ def main():
     print(f1_score(true_pred.round(), y_true_test))
     print(recall_score(true_pred.round(), y_true_test))  # SN (Sensitivity)
 
-    phyto_tn, phyto_fp, phyto_fn, phyto_tp = confusion_matrix(
+    unimi_tn, unimi_fp, unimi_fn, unimi_tp = confusion_matrix(
         true_pred.round(), y_true_test
     ).ravel()
-    phyto_specificity = phyto_tn / (phyto_tn + phyto_fp)
-    print(phyto_specificity),  # (SP) specificity
-    print(average_precision_score(y_true_test, true_pred))  # AUPR
+    unimi_specificity = unimi_tn / (unimi_tn + unimi_fp)
+    print(unimi_specificity),  # (SP) specificity
     print(average_precision_score(y_true_test, true_pred))  # AUPR
 
 

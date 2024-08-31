@@ -68,7 +68,7 @@ seed = 200422
 
 data_train = pd.read_csv("dataset/bitter-or-not/true_train.csv")
 data_test = pd.read_csv("dataset/bitter-or-not/true_test.csv")
-data_valid = pd.read_csv("dataset/test_set/bitter_new.csv")
+data_valid = pd.read_csv("dataset/test_set/phyto_test.csv")
 
 data_train = data_train.sample(frac=1)
 data_test = data_test.sample(frac=1)
@@ -164,11 +164,11 @@ def main():
     print(f1_score(true_pred.round(), y_true_test))
     print(recall_score(true_pred.round(), y_true_test))  # SN (Sensitivity)
 
-    bitter_new_tn, bitter_new_fp, bitter_new_fn, bitter_new_tp = confusion_matrix(
+    phyto_tn, phyto_fp, phyto_fn, phyto_tp = confusion_matrix(
         true_pred.round(), y_true_test
     ).ravel()
-    bitter_new_specificity = bitter_new_tn / (bitter_new_tn + bitter_new_fp)
-    print(bitter_new_specificity),  # (SP) specificity
+    phyto_specificity = phyto_tn / (phyto_tn + phyto_fp)
+    print(phyto_specificity),  # (SP) specificity
     print(average_precision_score(y_true_test, true_pred))  # AUPR
 
 

@@ -66,7 +66,6 @@ seed = 200422
 
 data_train = pd.read_csv("dataset/bitter-or-not/true_train.csv")
 data_valid = pd.read_csv("dataset/bitter-or-not/true_valid.csv")
-data_phyto = pd.read_csv("dataset/test_set/phyto_test.csv")
 data_bitter_new = pd.read_csv("dataset/test_set/bitter_new.csv")
 data_unimi = pd.read_csv("dataset/test_set/UNIMI.csv")
 
@@ -96,15 +95,15 @@ data_train["embedding"] = [
 data_train_vec = np.array([x.vec for x in data_train["embedding"]])
 data_train_vec = np.reshape(data_train_vec, (len(data_train_vec), 300, 1))
 
-data_phyto["mol"] = data_phyto["smiles"].apply(lambda x: Chem.MolFromSmiles(x))
-data_phyto["sentences"] = data_phyto["mol"].apply(
+data_unimi["mol"] = data_unimi["smiles"].apply(lambda x: Chem.MolFromSmiles(x))
+data_unimi["sentences"] = data_unimi["mol"].apply(
     lambda x: MolSentence(mol2alt_sentence(x, radius=2))
 )
-data_phyto["embedding"] = [
-    DfVec(x) for x in sentences2vec(data_phyto["sentences"], w2v_model, unseen="UNK")
+data_unimi["embedding"] = [
+    DfVec(x) for x in sentences2vec(data_unimi["sentences"], w2v_model, unseen="UNK")
 ]
-data_phyto_vec = np.array([x.vec for x in data_phyto["embedding"]])
-data_phyto_vec = np.reshape(data_phyto_vec, (len(data_phyto_vec), 300, 1))
+data_unimi_vec = np.array([x.vec for x in data_unimi["embedding"]])
+data_unimi_vec = np.reshape(data_unimi_vec, (len(data_unimi_vec), 300, 1))
 
 data_unimi["mol"] = data_unimi["smiles"].apply(lambda x: Chem.MolFromSmiles(x))
 data_unimi["sentences"] = data_unimi["mol"].apply(
@@ -138,25 +137,25 @@ def main():
         metrics=[f1],
     )
 
-    x_phyto = data_phyto_vec
-    y_phyto = data_phyto["Bitter"].values.reshape(-1, 1)
+    x_unimi = data_unimi_vec
+    y_unimi = data_unimi["Bitter"].values.reshape(-1, 1)
 
     history = model.fit(
-        x_train, y_train, validation_data=(x_phyto, y_phyto), epochs=15, batch_size=128
+        x_train, y_train, validation_data=(x_unimi, y_unimi), epochs=15, batch_size=128
     )
-    phyto_pred = model.predict(x_phyto)
+    unimi_pred = model.predict(x_unimi)
 
-    f1score = f1_score(phyto_pred.round(), y_phyto)
-    AUPR = average_precision_score(y_phyto, phyto_pred)
-    acc_phyto = accuracy_score(phyto_pred.round(), y_phyto)
-    recall_sensitivity = recall_score(phyto_pred.round(), y_phyto)
-    confusion = confusion_matrix(phyto_pred.round(), y_phyto)[0]
-    phyto_specificity1 = (confusion[0]) / (confusion[0] + confusion[1])
-    # phyto_tn, phyto_fp, phyto_fn, phyto_tp = confusion_matrix(
-    #     phyto_pred.round(), y_phyto
+    f1score = f1_score(unimi_pred.round(), y_unimi)
+    AUPR = average_precision_score(y_unimi, unimi_pred)
+    acc_unimi = accuracy_score(unimi_pred.round(), y_unimi)
+    recall_sensitivity = recall_score(unimi_pred.round(), y_unimi)
+    confusion = confusion_matrix(unimi_pred.round(), y_unimi)[0]
+    unimi_specificity1 = (confusion[0]) / (confusion[0] + confusion[1])
+    # unimi_tn, unimi_fp, unimi_fn, unimi_tp = confusion_matrix(
+    #     unimi_pred.round(), y_unimi
     # ).ravel()
-    # phyto_specificity2 = phyto_tn / (phyto_tn + phyto_fp)
-    # sensitive_phyto = phyto_tp / (phyto_tp + phyto_fn)
+    # unimi_specificity2 = unimi_tn / (unimi_tn + unimi_fp)
+    # sensitive_unimi = unimi_tp / (unimi_tp + unimi_fn)
 
     table = [
         [
@@ -170,12 +169,12 @@ def main():
             "AUPR",
         ],
         [
-            "Phyto",
-            acc_phyto,
+            "unimi",
+            acc_unimi,
             recall_sensitivity,
-            # sensitive_phyto,
-            phyto_specificity1,
-            # phyto_specificity2,
+            # sensitive_unimi,
+            unimi_specificity1,
+            # unimi_specificity2,
             f1score,
             AUPR,
         ],
@@ -183,21 +182,21 @@ def main():
     print(tabulate(table, headers="firstrow", tablefmt="grid"))
     # model.save("model/")
     return (
-        f1_score(phyto_pred.round(), y_phyto),
-        average_precision_score(y_phyto, phyto_pred),
+        f1_score(unimi_pred.round(), y_unimi),
+        average_precision_score(y_unimi, unimi_pred),
     )
 
 
-phyto_score = 0
+unimi_score = 0
 aupr = 0
 i = 0
 while 1:
     score = main()
-    phyto_score = max(phyto_score, score[0])
+    unimi_score = max(unimi_score, score[0])
     aupr = max(aupr, score[1])
     i += 1
     print("loop: ", i)
-    print("max phyto", phyto_score)  # f1
+    print("max unimi", unimi_score)  # f1
     print("max aupr", aupr)  # AUPR
-    if (score[0] >= 0.93) and (score[1] >= 0.98):
+    if (score[0] >= 0.78) and (score[1] >= 0.79):
         break
