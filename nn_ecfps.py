@@ -255,7 +255,7 @@ def main():
 
     # In bảng
     print(tabulate(table, headers="firstrow", tablefmt="grid"))
-    # model.save("model/propo_nn_ecfp")
+    model.save("model/propo_nn_ecfp.h5")
 
     return (
         [

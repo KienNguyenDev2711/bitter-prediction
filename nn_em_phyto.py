@@ -89,6 +89,7 @@ data_train["mol"] = data_train["smiles"].apply(lambda x: Chem.MolFromSmiles(x))
 data_train["sentences"] = data_train["mol"].apply(
     lambda x: MolSentence(mol2alt_sentence(x, radius=2))
 )
+# Chuyển đổi SMILES thành các đặc trưng
 w2v_model = word2vec.Word2Vec.load("pretrained/model_300dim.pkl")
 data_train["embedding"] = [
     DfVec(x) for x in sentences2vec(data_train["sentences"], w2v_model, unseen="UNK")
@@ -181,7 +182,7 @@ def main():
         ],
     ]
     print(tabulate(table, headers="firstrow", tablefmt="grid"))
-    # model.save("model/")
+    model.save("model/bitter_model.h5")
     return (
         f1_score(phyto_pred.round(), y_phyto),
         average_precision_score(y_phyto, phyto_pred),
