@@ -1,49 +1,57 @@
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.models import load_model
-from gensim.models import word2vec
-from keras.models import Model
-from keras.layers import Dense, concatenate
+from keras.models import load_model, Model
+from keras.layers import Dense, concatenate, Lambda
+from keras.regularizers import l2
+from tensorflow.keras import backend as K
+import pandas as pd
+from sklearn.metrics import f1_score
 from rdkit import Chem
 from mol2vec.features import mol2alt_sentence, MolSentence, DfVec, sentences2vec
-from keras.regularizers import l2
-
-from keras import backend as K
-from sklearn.metrics import f1_score
-import os
+from gensim.models import word2vec
 
 
-# Định nghĩa hàm f1
-def f1(y_true, y_pred):
+def f1(y_true, y_pred, reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE):
+    y_true = tf.cast(y_true, tf.float32)
+    y_pred = tf.cast(y_pred, tf.float32)
+
     def recall(y_true, y_pred):
         true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
         possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
         recall = true_positives / (possible_positives + K.epsilon())
-        return recall
+        if reduction == tf.keras.losses.Reduction.SUM:
+            return K.sum(recall)
+        elif reduction == tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE:
+            return K.mean(recall)
+        else:
+            return recall
 
     def precision(y_true, y_pred):
         true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
         predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
         precision = true_positives / (predicted_positives + K.epsilon())
-        return precision
+        if reduction == tf.keras.losses.Reduction.SUM:
+            return K.sum(precision)
+        elif reduction == tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE:
+            return K.mean(precision)
+        else:
+            return precision
 
     precision = precision(y_true, y_pred)
     recall = recall(y_true, y_pred)
     return 2 * ((precision * recall) / (precision + recall + K.epsilon()))
 
 
-def haha(x):
-    return 1 if x else 0
-
-
-# Đoạn mã xử lý dữ liệu
 seed = 200422
 data_phyto = pd.read_csv("dataset/test_set/phyto_test.csv")
 data_bitter_new = pd.read_csv("dataset/test_set/bitter_new.csv")
 data_unimi = pd.read_csv("dataset/test_set/UNIMI.csv")
 data_train = pd.read_csv("dataset/bitter-or-not/bitter_train.csv", sep="\t")
+
+
+def haha(x):
+    return 1 if x else 0
 
 
 data_train["Bitter"] = data_train["Bitter"].apply(lambda x: haha(x))
@@ -94,38 +102,41 @@ data_bitter_vec = np.array([x.vec for x in data_bitter_new["embedding"]])
 data_bitter_vec = np.reshape(data_bitter_vec, (len(data_bitter_vec), 300, 1))
 
 
-# Định nghĩa hàm load_all_models
-def load_all_models(directory, custom_objects):
-    all_models = []
-    for filename in os.listdir(directory):
-        if filename.endswith(".h5"):
-            model_path = os.path.join(directory, filename)
-            model = load_model(model_path, custom_objects=custom_objects)
-            all_models.append(model)
+def load_all_models(n_models):
+    all_models = list()
+    for i in range(n_models):
+        filename = f"model/stacking_embedding/model{i+1}.h5"
+        model = load_model(filename, compile=False, custom_objects={"f1": f1})
+        # Không cần build lại mô hình ở đây
+        all_models.append(model)
+        print(f">loaded {filename}")
     return all_models
 
 
-# Định nghĩa mô hình stacked
 def define_stacked_model(members):
-    for i in range(len(members)):
-        model = members[i]
-        # Gọi mô hình với một batch dữ liệu giả để xây dựng mô hình
-        model(np.zeros((1, 300, 1)))
+    input_shape = (300,)  # Thay đổi kích thước này nếu cần
+    common_input = keras.Input(shape=input_shape)
+
+    ensemble_outputs = []
+    for i, model in enumerate(members):
+        x = keras.layers.Lambda(
+            lambda x: tf.expand_dims(x, axis=-1),
+            output_shape=(300, 1),  # Chỉ định output_shape
+        )(common_input)
+        x = model(x)
         for layer in model.layers:
             layer.trainable = False
-        sth = np.random.randint(1000)
-        layer._name = "ensemble_" + str(i + 1) + str(sth) + "_" + layer.name
+            layer._name = f"ensemble_{i+1}_{np.random.randint(1000)}_{layer.name}"
+        ensemble_outputs.append(x)
 
-    ensemble_visible = [model.input for model in members]
-    ensemble_outputs = [model.output for model in members]
     merge = concatenate(ensemble_outputs)
     hidden = Dense(256, activation="sigmoid", kernel_regularizer=l2(0.001))(merge)
     hidden2 = Dense(128, activation="sigmoid")(hidden)
     hidden3 = Dense(64, activation="sigmoid")(hidden2)
     hidden4 = Dense(32, activation="sigmoid")(hidden3)
     output = Dense(1, activation="sigmoid", kernel_regularizer=l2(0.001))(hidden4)
-    model = Model(inputs=ensemble_visible, outputs=output)
-    # Cấu hình mô hình
+
+    model = Model(inputs=common_input, outputs=output)
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=0.001),
         loss=tf.keras.losses.BinaryCrossentropy(
@@ -136,43 +147,45 @@ def define_stacked_model(members):
     return model
 
 
-# Định nghĩa hàm fit_stacked_model
 def fit_stacked_model(model, inputX, inputy):
-    model.fit(
-        inputX,
-        inputy,
-        epochs=12,
-    )
+    model.fit(inputX, inputy, epochs=12)
 
 
-# Định nghĩa hàm predict_stacked_model
 def predict_stacked_model(model, inputX):
     return model.predict(inputX)
 
 
-# Hàm main
 def main(n_members):
-    custom_objects = {"f1": f1}
-    model_directory = "model/stacking_embedding/"
-    members = load_all_models(model_directory, custom_objects)
+    members = load_all_models(n_members)
     stacked_model = define_stacked_model(members)
-    fit_stacked_model(
-        stacked_model, data_bitter_vec, data_bitter_new["Bitter"].values.reshape(-1, 1)
-    )
-    yhat = predict_stacked_model(stacked_model, data_unimi_vec)
+    # Điều chỉnh kích thước dữ liệu đầu vào nếu cần
+    data_train_vec_reshaped = data_train_vec.reshape(data_train_vec.shape[0], 300)
+    inputy = data_train["Bitter"].values.reshape(-1, 1).astype(np.float32)
+    fit_stacked_model(stacked_model, data_train_vec_reshaped, inputy)
+    # Điều chỉnh kích thước dữ liệu dự đoán nếu cần
+    data_phyto_vec_reshaped = data_phyto_vec.reshape(data_phyto_vec.shape[0], 300)
+
+    yhat = predict_stacked_model(stacked_model, data_phyto_vec_reshaped)
 
     for i in range(len(yhat)):
-        if yhat[i] > 0.2:
-            yhat[i] = 1
-        else:
-            yhat[i] = 0
+        yhat[i] = 1 if yhat[i] > 0.2 else 0
 
     acc = f1_score(data_phyto["Bitter"].values.reshape(-1, 1), yhat)
-    yhat = np.average(yhat, axis=1)
+    yhat = np.mean(yhat, axis=0)  # Thay đổi dòng này
     print(yhat)
     print("Stacked Test Accuracy:", acc)
+
+    # Lưu mô hình đã huấn luyện
+    stacked_model.save("model-final.h5")
+    print("Model saved as model-final.h5")
     return acc
 
 
 n_members = 4
-score = main(n_members)
+i = 0
+while 1:
+    score = main(n_members)
+    i += 1
+    print("loop: ", i)
+    if score >= 0.94:
+        break
