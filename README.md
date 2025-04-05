@@ -1,3 +1,1 @@
-Anh thuong beo
-Beo beo beo 
-beo iuuuuu
+Bitter Prediction Test Using Python
